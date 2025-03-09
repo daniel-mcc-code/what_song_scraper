@@ -29,7 +29,7 @@ class WhatSongSpiderSpider(scrapy.Spider):
     allowed_domains = ["what-song.com"]
 
     def start_requests(self):
-        for title in box_office_list[:40]:
+        for title in box_office_list[:110]:
             SEARCH_PAYLOAD = {
                 "query": "query SearchElastic($query: String!) { searchElastic(query: $query) { type title year slug id artist_name img highlighted_title highlighted_artist_name _score } }",
                 "variables": {"query": title["title"]},
