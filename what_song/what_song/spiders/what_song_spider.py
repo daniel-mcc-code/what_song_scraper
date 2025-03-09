@@ -16,8 +16,11 @@ SEARCH_HEADERS = {
     'Sec-Fetch-Dest': 'empty'
 }
 
-box_office_df = pd.read_csv("box_office.csv")
-box_office_list = list(box_office_df["title"])
+import pandas as pd
+
+box_office_df = pd.read_csv("../box_office.csv")
+
+box_office_list = box_office_df[["title", "release_year"]].to_dict(orient="records")
 
 search_url = "https://v4-api-prod.what-song.com/graphql"
 
@@ -26,10 +29,10 @@ class WhatSongSpiderSpider(scrapy.Spider):
     allowed_domains = ["what-song.com"]
 
     def start_requests(self):
-        for title in box_office_list[:20]:
+        for title in box_office_list[:40]:
             SEARCH_PAYLOAD = {
                 "query": "query SearchElastic($query: String!) { searchElastic(query: $query) { type title year slug id artist_name img highlighted_title highlighted_artist_name _score } }",
-                "variables": {"query": title},
+                "variables": {"query": title["title"]},
                 "operationName": "SearchElastic"
             }
             
@@ -39,42 +42,45 @@ class WhatSongSpiderSpider(scrapy.Spider):
                 body=json.dumps(SEARCH_PAYLOAD), 
                 headers=SEARCH_HEADERS, 
                 callback=self.parse, 
-                method="POST"
+                method="POST",
+                meta=title
             )
 
-# Each of those 20 crawl requests gets a dictionary of dictionaries with the top search movies that come up when searching
+# Each of those 20 crawl requests gets a dictionary of dictionaries with the top search movies that come up when searching for the title of the movie
 
-# return a json file with the number 1 top search results for each of the 20 movies
     def parse(self, response):
         data = response.json()
         
         # Extract the list of search results
-        movies = data.get("data", {}).get("searchElastic", [])
+        # movies = data.get("data", {}).get("searchElastic", [])
 
         # Iterate over each movie and yield the data
-        for movie in movies:
-            yield {
-                "title": movie.get("title"),
-                "year": movie.get("year"),
-                "slug": movie.get("slug"),
-                "id": movie.get("id"),
-                "img_url": movie.get("img"),
-                "highlighted_title": movie.get("highlighted_title"),
-                "artist_name": movie.get("artist_name", "Unknown"),  # Handle None values
-                "score": movie.get("_score"),
-            }
-# {
-#         "data": {
-#             "searchElastic": [
-#                 {
-#                     "type": "movie",
-#                     "title": "The Last Airbender",
-#                     "year": 2010,
-#                     "slug": "The-Last-Airbender",
-#                     "id": 107164,
-#                     "artist_name": null,
-#                     "img": "/zgwRTYWEEPivTwjB9S03HtmMcbM.jpg",
-#                     "highlighted_title": "<em>The</em> <em>Last</em> <em>Airbender</em>",
-#                     "highlighted_artist_name": null,
-#                     "_score": 21.172426
-#                 },
+        for movie in data["data"]["searchElastic"]:
+            print("METADATA", response.meta)
+            if movie.get("title").lower() == response.meta["title"].lower() and movie.get("year") == response.meta["release_year"]:            
+                movie.update(response.meta)
+                # yield movie
+                soundtrack_url = f"https://what-song.com/Movies/Soundtrack/{movie["id"]}/{movie["slug"]}"
+                yield scrapy.Request(url=soundtrack_url, meta=movie, callback=self.parse_soundtrack, method="GET")
+    
+    def parse_soundtrack(self, response):
+        soundtracks = response.css("script#__NEXT_DATA__::text").get()
+        soundtracks = json.loads(soundtracks)
+        soundtracks.update(response.meta)
+        print("SOUNDTRACKS", soundtracks)   
+        yield soundtracks
+          
+          
+          # Do not need to yield each single element as entire thing (movie) is dictionary
+            # yield {
+            #     "title": movie.get("title"),
+            #     "year": movie.get("year"),
+            #     "slug": movie.get("slug"),
+            #     "id": movie.get("id"),
+            #     "img_url": movie.get("img"),
+            #     "highlighted_title": movie.get("highlighted_title"),
+            #     "artist_name": movie.get("artist_name", "Unknown"),  # Handle None values
+            #     "score": movie.get("_score"),
+            # }
+            
+            
