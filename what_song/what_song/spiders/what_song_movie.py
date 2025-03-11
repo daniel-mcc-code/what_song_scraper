@@ -25,7 +25,7 @@ box_office_list = box_office_df[["title", "release_year"]].to_dict(orient="recor
 search_url = "https://v4-api-prod.what-song.com/graphql"
 
 class WhatSongSpiderSpider(scrapy.Spider):
-    name = "what_song_spider"
+    name = "what_song_movie"
     allowed_domains = ["what-song.com"]
 
     def start_requests(self):
